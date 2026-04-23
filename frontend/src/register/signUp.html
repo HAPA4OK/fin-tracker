@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Финтрекер</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="form">
+        <h1>Регистрация</h1>
+        <form>
+            <div>
+                <label for="fullName">ФИО <span class="warning">*</span></label><br>
+                <input type="text" id="fullName" name="fullName" placeholder="Фамилия Имя Отчество">
+                <div class="error-message">Пожалуйста, введите ФИО</div>
+            </div>
+            <div>
+                <label for="login">Логин <span class="warning">*</span></label><br>
+                <input type="text" id="login" name="login" placeholder="login">
+                <div class="error-message">Пожалуйста, введите логин</div>
+            </div>
+            <div>
+                <label for="email">Электронная почта <span class="warning">*</span></label><br>
+                <input type="text" id="email" name="email" placeholder="example@email.com">
+                <div class="error-message">Введите корректный адрес электронной почты</div>
+            </div>
+            <div class="passwordField">
+                <label for="password">Пароль <span class="warning">*</span></label><br>
+                <input type="password" id="password" name="password" class="passwordPadding" placeholder="••••••••">
+                <input type="checkbox" id="seePassword" class="toggle-checkbox">
+                <label for="togglePassword" class="toggle-label"><span class="eye-icon eye-open"></span></label>
+                <div class="error-message">Пожалуйста введите корректный пароль</div>
+            </div>
+            <div class="passwordField">
+                <label for="passwordRepeat">Повторите пароль <span class="warning">*</span></label><br>
+                <input type="password" id="passwordRepeat" name="passwordRepeat" class="passwordPadding" placeholder="••••••••">
+                <input type="checkbox" id="seePassword" class="toggle-checkbox">
+                <label for="togglePassword" class="toggle-label"><span class="eye-icon eye-open"></span></label>
+                <div class="error-message">Пароли не совпадают</div>
+            </div>
+            <div>
+                <input type="checkbox" id="tosConfirm" name="tosConfirm" value="tosAgree">
+                <label class="smallLabel" for="tosConfirm">Я согласен с <a href="/tos.html">политикой обработки персональных данных</a></label><br>
+            </div>
+        </form>
+        <div>
+            <button type="submit">Зарегистрироваться</button>
+            <p class="smallLabel">Уже есть аккаунт? <a href="/signIn.html">Войти</a></p>
+        </div>
+    </div>
+
+</body>
+</html>
