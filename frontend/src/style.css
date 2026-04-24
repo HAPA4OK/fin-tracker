@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+
+
+html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
 
 body {
     display: flex;
@@ -7,7 +14,6 @@ body {
     min-height: 100vh;
     margin: 0;
     background-color: #F4F7FC;
-    font-family: "Roboto";
     font-size: 18px;
     color: #1F2A44;
     
@@ -31,7 +37,6 @@ body {
         box-sizing: border-box;
         border: 2px solid #E7EDF4;
         border-radius: 90px;
-        font-family: "Roboto";
         font-size: 18px;
         color: #1F2A44;
     }

@@ -2,10 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './dashboard.tsx';
 import Register from './register/register.tsx';
 import SignedUp from'./login/login.tsx';
+import AnalyticsPage from './main/analytics/AnalyticsPage.tsx';
 import './App.css';
 
-// Импорт компонентов
-import Header from './components/header.tsx';
+
+import Header from './components/Header.tsx';
 import OperationForm from './components/OperationForm.tsx';
 import OperationsList from './components/OperationList.tsx';
 import CategoryChart from './components/CategoryChart.tsx';
@@ -48,8 +49,9 @@ export default function App() {
         <Route path="/login" element={<SignedUp />} />
 
         <Route path="/main" element={<MainPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
 
-        {/* Редирект, если путь не найден */}
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

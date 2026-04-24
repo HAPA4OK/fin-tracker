@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+
 
 interface ChartData {
   label: string;
@@ -30,7 +32,10 @@ const CategoryChart: React.FC<ChartProps> = ({ title, total, data, isIncome }) =
         ))}
       </div>
     </div>
-    <a className="analytics-link" href="/analytics">Перейти к детальной аналитике</a>
+    <Link className="analytics-link" to="/analytics">
+        Перейти к детальной аналитике
+    </Link>
+
   </section>
 );
 
