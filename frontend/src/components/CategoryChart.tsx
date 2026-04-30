@@ -32,7 +32,7 @@ const CategoryChart: React.FC<ChartProps> = ({ title, total, data, isIncome }) =
         ))}
       </div>
     </div>
-    <Link className="analytics-link" to="/analytics">
+    <Link className="analytics-link" to="/main/analytics">
         Перейти к детальной аналитике
     </Link>
 

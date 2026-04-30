@@ -22,7 +22,6 @@ export default function AnalyticsPage() {
     operationsCount,
     operations,
     showMoreHref,
-    exportHref,
   } = analyticsData;
 
   return (
@@ -55,7 +54,7 @@ export default function AnalyticsPage() {
             showMoreHref={showMoreHref}
           />
         </div>
-        <ExportButton href={exportHref} />
+        <ExportButton fileId="69ef897c2d62014d60e84e9d" />
       </section>
     </div>
   );

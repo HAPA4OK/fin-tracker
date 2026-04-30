@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './dashboard.tsx';
 import Register from './register/register.tsx';
 import SignedUp from'./login/login.tsx';
-import AnalyticsPage from './main/analytics/AnalyticsPage.tsx';
+import {Subroutes} from './pages/routes.tsx';
 import './App.css';
 
 
@@ -40,19 +40,20 @@ const MainPage = () => (
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+
         
-        <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<Register />} />
         
-        <Route path="/login" element={<SignedUp />} />
+          <Route path="/login" element={<SignedUp />} />
 
-        <Route path="/main" element={<MainPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/main" element={<MainPage />} />
 
+          {Subroutes()}
 
-        <Route path="*" element={<Navigate to="/" />} />
+          <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   );

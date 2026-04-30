@@ -11,25 +11,25 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 
-dotenv.config({ path: path.resolve(__dirname, './.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 app.use(cors({
-  origin: '*', 
-  exposedHeaders: ['Content-Disposition']
+  origin: 'http://localhost:5173', // Порт вашего Vite/React
+  exposedHeaders: ['Content-Disposition'] // Пропуск для заголовка с именем файла
 }));
 app.use(bodyParser.json());
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB Atlas');
+    return syncUploadsDirectoryToMongo();
   })
   .then(() => {
+    watchUploadsDirectory();
     console.log('Uploads directory sync is enabled');
   })
   .catch((err) => console.error('Connection error:', err));
-
-  // схемы и прочая лабуба
 
 const userSchema = new Schema({
   fullname: { type: String, trim: true },
@@ -52,8 +52,8 @@ const transactionSchema = new Schema({
 
 const fileSchema = new mongoose.Schema({
   originalName: { type: String, required: true },
-  filename: { type: String, required: true, unique: true }, 
-  path: { type: String, required: true, unique: true },
+  filename: { type: String, required: true },
+  path: { type: String, required: true },
   mimetype: { type: String, required: true },
   size: { type: Number, required: true },
   uploadDate: { type: Date, default: Date.now },
@@ -61,10 +61,7 @@ const fileSchema = new mongoose.Schema({
 
 const FileModel = mongoose.models.File || mongoose.model('File', fileSchema);
 
-
-// ----------------------------------------------
-
-const uploadsDir = path.resolve(__dirname, './uploads');
+const uploadsDir = path.resolve(__dirname, '../uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 function getModelbyCategoryName(categoryName) {
@@ -163,8 +160,6 @@ const upload = multer({
   },
 });
 
-// роуты
-
 app.post('/register', async (req, res) => {
   try {
     const { fullname, login, email, password, gender } = req.body;
@@ -233,25 +228,15 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ message: 'Файл не был загружен' });
     }
 
-    const newFile = await FileModel.create({
-      originalName: req.file.originalname,
-      filename: req.file.filename,
-      path: req.file.path,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      uploadDate: new Date()
-    });
+    const savedFile = await syncFileToMongo(req.file.filename);
 
     res.status(201).json({
       message: 'PDF-файл успешно загружен',
-      file: newFile,
+      file: savedFile,
     });
   } catch (error) {
-    if (error.code === 11000) { // Ошибка дубликата в MongoDB
-      return res.status(400).json({ message: 'Этот файл уже зарегистрирован в базе' });
-    }
     console.error('Upload Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
+    res.status(500).json({ message: 'Ошибка сервера при сохранении файла' });
   }
 });
 
@@ -295,10 +280,6 @@ app.use((error, _req, res, _next) => {
 
   res.status(500).json({ message: 'Внутренняя ошибка сервера' });
 });
-
-
-
-// ----------------------------------------------
 
 const PORT = process.env.PORT || 5000;
 
