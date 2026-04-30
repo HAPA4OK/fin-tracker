@@ -17,17 +17,13 @@ import StatsCards from './components/StatsCards.tsx';
 import AnalyticsPage from './pages/analytics/AnalyticsPage.tsx';
 import AdminUploadPage from './pages/admin/AdminUploadPage.tsx';
 
-import {
-  FamilyMenuPage,
-  FamilyPromptPage,
-  FamilyCreateModalPage,
-  FamilySettingsPage,
-} from './pages/family';
+import FamilyMenuPage from './pages/family/pages/FamilyMenuPage.tsx';
+import FamilyPromptPage from './pages/family/pages/FamilyPromptPage.tsx';
+import FamilyCreateModalPage from './pages/family/pages/FamilyCreateModalPage.tsx';
+import FamilySettingsPage from './pages/family/pages/FamilySettingsPage.tsx';
 
-import {
-  InvitationsPage,
-  ProfileSettingsPage,
-} from './pages/account';
+import InvitationsPage from './pages/account/pages/InvitationsPage.tsx';
+import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
 
 type AppRoute = {
   path: string;
@@ -61,17 +57,17 @@ const MainPage = () => (
 const NotReadyPage = () => (
   <div className="body-dim">
     <div className="app-shell">
-      <div className="panel" style={{ padding: 24 }}>
+      <div className="panel not-ready-card">
         <h1>Раздел пока не готов</h1>
-        <p>Эта страница будет добавлена позже.</p>
+        <p>Эта функция будет добавлена позже.</p>
+        <a className="primary-button not-ready-link" href="/main">
+          Вернуться на главную
+        </a>
       </div>
     </div>
   </div>
 );
 
-/**
- * Публичные страницы
- */
 const publicRoutes: AppRoute[] = [
   {
     path: '/',
@@ -87,9 +83,6 @@ const publicRoutes: AppRoute[] = [
   },
 ];
 
-/**
- * Основной экран приложения
- */
 const mainRoutes: AppRoute[] = [
   {
     path: '/main',
@@ -99,14 +92,10 @@ const mainRoutes: AppRoute[] = [
     path: '/main/analytics',
     element: <AnalyticsPage />,
   },
-
-  // Алиас из family/routes.ts
   {
     path: '/analytics',
     element: <Navigate to="/main/analytics" replace />,
   },
-
-  // В Header сейчас есть href="/main-menu", поэтому оставил редирект.
   {
     path: '/main-menu',
     element: <Navigate to="/menu" replace />,
@@ -117,9 +106,6 @@ const mainRoutes: AppRoute[] = [
   },
 ];
 
-/**
- * Админка
- */
 const adminRoutes: AppRoute[] = [
   {
     path: '/admin/upload',
@@ -127,9 +113,6 @@ const adminRoutes: AppRoute[] = [
   },
 ];
 
-/**
- * Семья
- */
 const familyRoutes: AppRoute[] = [
   {
     path: '/family',
@@ -153,9 +136,6 @@ const familyRoutes: AppRoute[] = [
   },
 ];
 
-/**
- * Аккаунт
- */
 const accountRoutes: AppRoute[] = [
   {
     path: '/account/invitations',
@@ -165,8 +145,6 @@ const accountRoutes: AppRoute[] = [
     path: '/account/profile-settings',
     element: <ProfileSettingsPage />,
   },
-
-  // Алиасы из src/pages/account/routes.ts и routes-example.tsx
   {
     path: '/invitations',
     element: <InvitationsPage />,
@@ -189,9 +167,6 @@ const accountRoutes: AppRoute[] = [
   },
 ];
 
-/**
- * Системные маршруты
- */
 const systemRoutes: AppRoute[] = [
   {
     path: '/not-ready',
