@@ -6,22 +6,18 @@ import './App.css';
 import Dashboard from './dashboard.tsx';
 import Register from './register/register.tsx';
 import SignedUp from './login/login.tsx';
-
 import Header from './components/Header.tsx';
 import OperationForm from './components/OperationForm.tsx';
 import OperationsList from './components/OperationList.tsx';
 import CategoryChart from './components/CategoryChart.tsx';
 import PeriodSelector from './components/PeriodSelector.tsx';
 import StatsCards from './components/StatsCards.tsx';
-
 import AnalyticsPage from './pages/analytics/AnalyticsPage.tsx';
 import AdminUploadPage from './pages/admin/AdminUploadPage.tsx';
-
 import FamilyMenuPage from './pages/family/pages/FamilyMenuPage.tsx';
 import FamilyPromptPage from './pages/family/pages/FamilyPromptPage.tsx';
 import FamilyCreateModalPage from './pages/family/pages/FamilyCreateModalPage.tsx';
 import FamilySettingsPage from './pages/family/pages/FamilySettingsPage.tsx';
-
 import InvitationsPage from './pages/account/pages/InvitationsPage.tsx';
 import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
 
@@ -30,10 +26,14 @@ type AppRoute = {
   element: ReactNode;
 };
 
-const MainPage = () => (
+type MainPageProps = {
+  defaultMenuOpen?: boolean;
+};
+
+const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => (
   <div className="body-dim">
     <div className="app-shell">
-      <Header userName="Олег Зуев" />
+      <Header userName="Олег Зуев" defaultMenuOpen={defaultMenuOpen} />
 
       <main className="dashboard-grid">
         <div className="left-stack">
@@ -50,20 +50,6 @@ const MainPage = () => (
       </main>
 
       <footer className="panel footer">© 2025 Финансовый трекер</footer>
-    </div>
-  </div>
-);
-
-const NotReadyPage = () => (
-  <div className="body-dim">
-    <div className="app-shell">
-      <div className="panel not-ready-card">
-        <h1>Раздел пока не готов</h1>
-        <p>Эта функция будет добавлена позже.</p>
-        <a className="primary-button not-ready-link" href="/main">
-          Вернуться на главную
-        </a>
-      </div>
     </div>
   </div>
 );
@@ -98,11 +84,11 @@ const mainRoutes: AppRoute[] = [
   },
   {
     path: '/main-menu',
-    element: <Navigate to="/menu" replace />,
+    element: <MainPage defaultMenuOpen />,
   },
   {
     path: '/menu',
-    element: <Navigate to="/main" replace />,
+    element: <MainPage defaultMenuOpen />,
   },
 ];
 
@@ -168,10 +154,6 @@ const accountRoutes: AppRoute[] = [
 ];
 
 const systemRoutes: AppRoute[] = [
-  {
-    path: '/not-ready',
-    element: <NotReadyPage />,
-  },
   {
     path: '*',
     element: <Navigate to="/" replace />,
