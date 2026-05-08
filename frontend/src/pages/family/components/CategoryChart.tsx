@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
+
 import type { LegendItem } from '../data/charts';
-import { routes } from '../routes';
 
 type CategoryChartProps = {
   title: string;
@@ -9,27 +9,41 @@ type CategoryChartProps = {
   legend: LegendItem[];
 };
 
-export function CategoryChart({ title, total, variant = 'expense', legend }: CategoryChartProps) {
+export function CategoryChart({
+  title,
+  total,
+  variant = 'expense',
+  legend,
+}: CategoryChartProps) {
   const donutClassName = variant === 'income' ? 'donut income' : 'donut';
 
   return (
     <section className="panel chart-card">
-      <h2 className="section-title" style={{ marginBottom: 12 }}>{title}</h2>
-      <div className="donut-wrap">
+      <div className="chart-head">
+        <h2 className="section-title">{title}</h2>
+        <Link className="analytics-link" to="/main/analytics">
+          Перейти к детальной аналитике
+        </Link>
+      </div>
+
+      <div className="chart-body">
         <div className={donutClassName}>
           <div className="donut-center">{total}</div>
         </div>
+
         <div className="legend">
           {legend.map((item) => (
-            <div className="legend-row" key={item.label}>
-              <span className={`legend-dot ${item.dotClass}`}></span>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
+            <div key={item.label} className="legend-row">
+              <div className="legend-left">
+                <span className={`legend-dot ${item.tone}`} />
+                <span>{item.label}</span>
+              </div>
+
+              <span>{item.value}</span>
             </div>
           ))}
         </div>
       </div>
-      <Link className="analytics-link" to={routes.analytics}>Перейти к детальной аналитике</Link>
     </section>
   );
 }

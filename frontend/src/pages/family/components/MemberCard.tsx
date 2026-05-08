@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { routes } from '../routes';
 
 type MemberCardProps = {
   name: string;
@@ -14,10 +13,11 @@ export function MemberCard({ name, email, isOwner = false }: MemberCardProps) {
         <div className="member-name">{name}</div>
         <div className="member-mail">{email}</div>
       </div>
+
       {isOwner ? (
         <span className="owner-badge">Владелец</span>
       ) : (
-        <Link className="member-remove" to={routes.notReady}>×</Link>
+        <Link className="member-remove" to="/not-ready">×</Link>
       )}
     </div>
   );

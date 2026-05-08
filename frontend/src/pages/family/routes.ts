@@ -8,5 +8,4 @@ export const routes = {
   profileSettings: '/profile/settings',
   invitations: '/invitations',
   analytics: '/analytics',
-  notReady: '/not-ready',
 } as const;
