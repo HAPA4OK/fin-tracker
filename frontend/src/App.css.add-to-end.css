@@ -1,0 +1,25 @@
+/* ===== OperationForm working state ===== */
+
+.form-notice {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(11, 79, 126, 0.08);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.primary-button:focus-visible,
+.input-like:focus-visible,
+.select-like:focus-visible {
+  outline: 3px solid rgba(100, 173, 247, 0.38);
+  outline-offset: 3px;
+}
+
+/* ===== End OperationForm working state ===== */

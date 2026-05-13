@@ -1,142 +1,414 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-// Тип данных из MongoDB (PFM проект)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 interface ApiTransaction {
   _id: string;
-  transactionNum: number;
+  transactionNum?: number;
   amount: number;
-  date: string; 
-  categoryInfo: string;
+  balance?: number;
+  date: string;
+  category?: string;
+  categoryInfo?: string;
   bank?: string;
+  commentary?: string;
+  page?: number;
+  fileId?: string;
+  userId?: string;
 }
 
-// Тип для отображения в верстке
 type Operation = {
-  id: string | number;
+  id: string;
   title: string;
   tag: string;
   date: string;
+  isoDate: string;
   amount: string;
   color: 'green' | 'red';
+  source: ApiTransaction;
+};
+
+type EditFormState = {
+  commentary: string;
+  amount: string;
+  type: 'income' | 'expense';
+  categoryInfo: string;
+  bank: string;
+  date: string;
 };
 
 interface OperationsListProps {
-  transactions: ApiTransaction[]; 
+  transactions: ApiTransaction[];
+  onChanged?: () => void;
 }
 
-const rowMenuStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: 0,
-  top: '42px',
-  width: '190px',
-  zIndex: 20,
-  padding: '8px',
+const categoryLabels: Record<string, string> = {
+  salary: 'Зарплата',
+  transfers: 'Переводы',
+  products: 'Продукты',
+  others: 'Другое',
+  other: 'Другое',
+  transport: 'Транспорт',
+  restaurant: 'Рестораны',
+  restaurants: 'Рестораны',
+  supermarket: 'Супермаркеты',
+  cash: 'Наличные',
+  services: 'Услуги',
 };
 
-const menuButtonStyle: React.CSSProperties = {
-  width: '100%',
-  border: 0,
-  background: 'transparent',
-  color: 'inherit',
-  cursor: 'pointer',
-  padding: '10px 12px',
-  textAlign: 'left',
-  borderRadius: '12px',
-  font: 'inherit',
+const categoryOptions = [
+  { value: 'salary', label: 'Зарплата' },
+  { value: 'transfers', label: 'Переводы' },
+  { value: 'products', label: 'Продукты' },
+  { value: 'transport', label: 'Транспорт' },
+  { value: 'restaurant', label: 'Рестораны' },
+  { value: 'services', label: 'Услуги' },
+  { value: 'cash', label: 'Наличные' },
+  { value: 'others', label: 'Другое' },
+];
+
+const formatDate = (value: string) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return date.toLocaleDateString('ru-RU');
 };
 
-const noticeStyle: React.CSSProperties = {
-  marginTop: '12px',
-  padding: '12px 14px',
-  borderRadius: '16px',
-  background: 'rgba(11, 79, 126, 0.08)',
-  color: '#0b4f7e',
-  fontSize: '14px',
-  fontWeight: 700,
+const toInputDate = (value: string) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 };
 
-const OperationsList: React.FC<OperationsListProps> = ({ transactions }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [activeOperationId, setActiveOperationId] = useState<string | number | null>(null);
-  const [notice, setNotice] = useState('');
+const formatAmount = (value: number) => {
+  const sign = value > 0 ? '+' : '';
 
-  // Трансформируем ApiTransaction в Operation для верстки
-  const mappedOperations: Operation[] = transactions.map((apiOp) => {
-    const isIncome = apiOp.amount > 0;
-    return {
-      id: apiOp._id, // Используем MongoDB ID
-      title: apiOp.categoryInfo || 'Без категории',
-      tag: apiOp.bank || 'Общий счет',
-      date: new Date(apiOp.date).toLocaleDateString('ru-RU'), // Формат 29.03.2026
-      amount: `${isIncome ? '+' : ''}${apiOp.amount.toLocaleString()} ₽`,
-      color: isIncome ? 'green' : 'red',
-    };
+  return `${sign}${value.toLocaleString('ru-RU')} ₽`;
+};
+
+const normalizeCategory = (categoryInfo?: string) => {
+  const normalizedCategory = categoryInfo?.trim();
+
+  if (!normalizedCategory) {
+    return 'others';
+  }
+
+  return normalizedCategory;
+};
+
+const getCategoryTitle = (categoryInfo?: string) => {
+  const normalizedCategory = normalizeCategory(categoryInfo);
+
+  return categoryLabels[normalizedCategory] || normalizedCategory;
+};
+
+const getDescription = (transaction: ApiTransaction) => {
+  const commentary = transaction.commentary?.trim();
+
+  if (commentary && commentary !== 'Комментарий не найден') {
+    return commentary;
+  }
+
+  return getCategoryTitle(transaction.categoryInfo || transaction.category);
+};
+
+const sortTransactionsByDateDesc = (transactions: ApiTransaction[]) =>
+  [...transactions].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+
+    const safeDateA = Number.isNaN(dateA) ? 0 : dateA;
+    const safeDateB = Number.isNaN(dateB) ? 0 : dateB;
+    const dateDiff = safeDateB - safeDateA;
+
+    if (dateDiff !== 0) {
+      return dateDiff;
+    }
+
+    return (b.transactionNum || 0) - (a.transactionNum || 0);
   });
 
-  // Логика "Показать больше"
+const preparePayload = (form: EditFormState, source?: ApiTransaction) => {
+  const rawAmount = Number(String(form.amount).replace(',', '.'));
+  const normalizedAmount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
+
+  return {
+    date: form.date,
+    amount: form.type === 'income' ? normalizedAmount : -normalizedAmount,
+    balance: source?.balance,
+    category: form.categoryInfo,
+    categoryInfo: form.categoryInfo,
+    bank: form.bank.trim() || 'Общий счёт',
+    commentary: form.commentary.trim() || getCategoryTitle(form.categoryInfo),
+  };
+};
+
+const OperationsList: React.FC<OperationsListProps> = ({ transactions, onChanged }) => {
+  const [items, setItems] = useState<ApiTransaction[]>(transactions);
+  const [expanded, setExpanded] = useState(false);
+  const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<ApiTransaction | null>(null);
+  const [form, setForm] = useState<EditFormState>({
+    commentary: '',
+    amount: '',
+    type: 'expense',
+    categoryInfo: 'others',
+    bank: '',
+    date: new Date().toISOString().slice(0, 10),
+  });
+  const [notice, setNotice] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setItems(transactions);
+  }, [transactions]);
+
+  const mappedOperations: Operation[] = useMemo(
+    () =>
+      sortTransactionsByDateDesc(items).map((apiOp) => {
+        const isIncome = apiOp.amount > 0;
+
+        return {
+          id: apiOp._id,
+          title: getDescription(apiOp),
+          tag: apiOp.bank || 'Общий счёт',
+          date: formatDate(apiOp.date),
+          isoDate: apiOp.date,
+          amount: formatAmount(apiOp.amount),
+          color: isIncome ? 'green' : 'red',
+          source: apiOp,
+        };
+      }),
+    [items],
+  );
+
   const visibleOperations = expanded ? mappedOperations : mappedOperations.slice(0, 4);
 
-  const handleAction = (action: string, operation: Operation) => {
-    setNotice(`${action}: ${operation.title}`);
+  const openEditModal = (transaction: ApiTransaction) => {
+    const categoryInfo = normalizeCategory(transaction.categoryInfo || transaction.category);
+
+    setForm({
+      commentary: getDescription(transaction),
+      amount: String(Math.abs(transaction.amount)),
+      type: transaction.amount >= 0 ? 'income' : 'expense',
+      categoryInfo,
+      bank: transaction.bank || 'Общий счёт',
+      date: toInputDate(transaction.date),
+    });
+
+    setEditingTransaction(transaction);
     setActiveOperationId(null);
+    setNotice('');
   };
 
+  const closeEditModal = () => {
+    setEditingTransaction(null);
+    setIsSaving(false);
+  };
+
+  const handleDelete = async (operation: Operation) => {
+    setActiveOperationId(null);
+    setNotice('');
+
+    try {
+      const response = await fetch(`${API_URL}/api/transactions/${operation.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Не удалось удалить операцию');
+      }
+
+      setItems((current) => current.filter((transaction) => transaction._id !== operation.id));
+      setNotice('Операция удалена');
+      onChanged?.();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Не удалось удалить операцию');
+    }
+  };
+
+  const handleRepeat = async (operation: Operation) => {
+    setActiveOperationId(null);
+    setNotice('');
+
+    try {
+      const source = operation.source;
+      const payload = {
+        date: toInputDate(source.date),
+        amount: source.amount,
+        balance: source.balance,
+        category: source.category || source.categoryInfo || 'others',
+        categoryInfo: source.categoryInfo || source.category || 'others',
+        bank: source.bank || 'Общий счёт',
+        commentary: source.commentary || getDescription(source),
+        page: source.page,
+      };
+
+      const response = await fetch(`${API_URL}/api/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Не удалось повторить операцию');
+      }
+
+      const result = await response.json();
+      const createdTransaction = result.data || result;
+
+      if (createdTransaction?._id) {
+        setItems((current) => [createdTransaction, ...current]);
+      }
+
+      setNotice('Операция повторена');
+      onChanged?.();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Не удалось повторить операцию');
+    }
+  };
+
+  const handleSaveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingTransaction) {
+      return;
+    }
+
+    setIsSaving(true);
+    setNotice('');
+
+    try {
+      const payload = preparePayload(form, editingTransaction);
+
+      const response = await fetch(`${API_URL}/api/transactions/${editingTransaction._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Не удалось сохранить операцию');
+      }
+
+      const result = await response.json();
+      const updatedTransaction = result.data || result;
+
+      setItems((current) =>
+        current.map((transaction) =>
+          transaction._id === editingTransaction._id ? updatedTransaction : transaction,
+        ),
+      );
+
+      setNotice('Операция обновлена');
+      setEditingTransaction(null);
+      onChanged?.();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Не удалось сохранить операцию');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const selectedCategoryExists = categoryOptions.some(
+    (category) => category.value === form.categoryInfo,
+  );
+
   return (
-    <section className="panel operations-panel">
-      <div className="section-heading">
-        <h2>Все операции</h2>
-        <span className="list-count">{mappedOperations.length}</span>
+    <section className="panel operations-card operations-list">
+      <div className="operations-list__header">
+        <div>
+          <h2 className="section-title operations-list__title">Все операции</h2>
+          <p className="operations-list__subtitle">Последние операции за выбранный период</p>
+        </div>
+
+        <span className="operations-list__count">{mappedOperations.length}</span>
       </div>
 
-      <div className="operations-list">
-        {mappedOperations.length > 0 ? (
-          visibleOperations.map((op) => (
-            <div className="operation-row" style={{ position: 'relative' }} key={op.id}>
-              <div>
-                <strong>{op.title}</strong>
-                <span>{op.tag}</span>
+      {mappedOperations.length > 0 ? (
+        <div className="operations-list__items">
+          {visibleOperations.map((op) => (
+            <article className="operation-row" key={op.id}>
+              <div
+                className={`operation-row__icon operation-row__icon--${op.color}`}
+                aria-hidden="true"
+              >
+                {op.color === 'green' ? '+' : '−'}
               </div>
 
-              <span>{op.date}</span>
-              <strong className={op.color}>{op.amount}</strong>
+              <div className="operation-row__main">
+                <strong className="operation-row__title">{op.title}</strong>
+                <span className="operation-row__tag">{op.tag}</span>
+              </div>
 
-              <button
-                className="kebab"
-                type="button"
-                onClick={() => {
-                  setActiveOperationId((current) => (current === op.id ? null : op.id));
-                  setNotice('');
-                }}
-                aria-label={`Открыть действия для операции ${op.title}`}
-              >
-                ⋯
-              </button>
+              <time className="operation-row__date" dateTime={op.isoDate}>
+                {op.date}
+              </time>
 
-              {activeOperationId === op.id && (
-                <div className="dropdown" style={rowMenuStyle} role="menu">
-                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Редактирование выбрано', op)}>
-                    Редактировать
-                  </button>
-                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Повтор операции выбран', op)}>
-                    Повторить
-                  </button>
-                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Удаление выбрано', op)}>
-                    Удалить
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
-        ) : (
-          <div style={noticeStyle}>За выбранный период операций не найдено</div>
-        )}
-      </div>
+              <strong className={`operation-row__amount operation-row__amount--${op.color}`}>
+                {op.amount}
+              </strong>
 
-      {notice && <div style={noticeStyle}>{notice}</div>}
+              <div className="operation-row__actions">
+                <button
+                  className="operation-row__menu-button"
+                  type="button"
+                  onClick={() => {
+                    setActiveOperationId((current) => (current === op.id ? null : op.id));
+                    setNotice('');
+                  }}
+                  aria-label={`Открыть действия для операции ${op.title}`}
+                >
+                  ⋯
+                </button>
+
+                {activeOperationId === op.id && (
+                  <div className="operation-row__menu" role="menu">
+                    <button type="button" onClick={() => openEditModal(op.source)}>
+                      Редактировать
+                    </button>
+
+                    <button type="button" onClick={() => handleRepeat(op)}>
+                      Повторить
+                    </button>
+
+                    <button
+                      className="operation-row__menu-danger"
+                      type="button"
+                      onClick={() => handleDelete(op)}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="operations-list__empty">За выбранный период операций не найдено</div>
+      )}
+
+      {notice && <div className="operations-list__notice">{notice}</div>}
 
       {mappedOperations.length > 4 && (
         <button
-          className="show-more"
+          className="action-light operations-list__show-more"
           type="button"
           onClick={() => {
             setExpanded((value) => !value);
@@ -146,6 +418,152 @@ const OperationsList: React.FC<OperationsListProps> = ({ transactions }) => {
         >
           {expanded ? 'Свернуть' : 'Показать больше'}
         </button>
+      )}
+
+      {editingTransaction && (
+        <div className="operation-edit-modal-backdrop" onMouseDown={closeEditModal}>
+          <form
+            className="operation-edit-modal panel"
+            onSubmit={handleSaveEdit}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="operation-edit-modal__close"
+              type="button"
+              onClick={closeEditModal}
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+
+            <p className="operation-edit-modal__eyebrow">Операция</p>
+            <h2>Редактировать операцию</h2>
+
+            <label className="operation-edit-field">
+              <span>Описание</span>
+              <input
+                value={form.commentary}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    commentary: event.target.value,
+                  }))
+                }
+                placeholder="Например: продукты, зарплата, перевод"
+              />
+            </label>
+
+            <div className="operation-edit-grid">
+              <label className="operation-edit-field">
+                <span>Сумма</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      amount: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              <label className="operation-edit-field">
+                <span>Дата</span>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      date: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="operation-edit-type">
+              <button
+                type="button"
+                className={form.type === 'income' ? 'active' : ''}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    type: 'income',
+                  }))
+                }
+              >
+                Доход
+              </button>
+
+              <button
+                type="button"
+                className={form.type === 'expense' ? 'active' : ''}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    type: 'expense',
+                  }))
+                }
+              >
+                Расход
+              </button>
+            </div>
+
+            <div className="operation-edit-grid">
+              <label className="operation-edit-field">
+                <span>Категория</span>
+                <select
+                  value={form.categoryInfo}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      categoryInfo: event.target.value,
+                    }))
+                  }
+                >
+                  {!selectedCategoryExists && (
+                    <option value={form.categoryInfo}>{getCategoryTitle(form.categoryInfo)}</option>
+                  )}
+
+                  {categoryOptions.map((category) => (
+                    <option value={category.value} key={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="operation-edit-field">
+                <span>Счёт / банк</span>
+                <input
+                  value={form.bank}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      bank: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="operation-edit-modal__actions">
+              <button type="button" className="operation-edit-cancel" onClick={closeEditModal}>
+                Отмена
+              </button>
+
+              <button type="submit" className="operation-edit-save" disabled={isSaving}>
+                {isSaving ? 'Сохраняем...' : 'Сохранить'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </section>
   );

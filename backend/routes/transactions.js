@@ -2,107 +2,234 @@ const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
 
+const allowedSortFields = ['date', 'amount', 'balance', 'transactionNum', 'createdAt', 'updatedAt'];
+
+const normalizeDateRange = (dateFrom, dateTo) => {
+  const query = {};
+
+  if (dateFrom || dateTo) {
+    query.date = {};
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      from.setHours(0, 0, 0, 0);
+      query.date.$gte = from;
+    }
+
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      query.date.$lte = to;
+    }
+  }
+
+  return query;
+};
+
+const getNextTransactionNum = async () => {
+  const lastTransaction = await Transaction.findOne({})
+    .sort({ transactionNum: -1 })
+    .select('transactionNum')
+    .lean();
+
+  return (lastTransaction?.transactionNum || 0) + 1;
+};
+
+const buildTransactionPayload = (body) => {
+  const amount = Number(body.amount);
+
+  if (!Number.isFinite(amount)) {
+    throw new Error('Некорректная сумма операции');
+  }
+
+  if (!body.date) {
+    throw new Error('Укажите дату операции');
+  }
+
+  return {
+    date: new Date(body.date),
+    amount,
+    balance: body.balance === undefined || body.balance === '' ? undefined : Number(body.balance),
+    category: body.category || body.categoryInfo || 'others',
+    categoryInfo: body.categoryInfo || body.category || 'others',
+    bank: body.bank || 'Общий счёт',
+    commentary: body.commentary || '',
+    page: body.page,
+    fileId: body.fileId,
+    userId: body.userId,
+  };
+};
+
 // GET /api/transactions
 router.get('/', async (req, res) => {
-    try {
-        // 1. Параметры пагинации и сортировки
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 50;
-        const sortBy = req.query.sortBy || 'transactionNum'; 
-        const order = req.query.order === 'desc' ? -1 : 1; 
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const requestedSortBy = req.query.sortBy || 'date';
+    const sortBy = allowedSortFields.includes(requestedSortBy)
+      ? requestedSortBy
+      : 'transactionNum';
+    const order = req.query.order === 'asc' ? 1 : -1;
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, Math.min(200, limit));
+    const skip = (safePage - 1) * safeLimit;
+    const { dateFrom, dateTo } = req.query;
+    const query = normalizeDateRange(dateFrom, dateTo);
 
-        const safePage = Math.max(1, page);
-        const safeLimit = Math.max(1, Math.min(100, limit));
-        const skip = (safePage - 1) * safeLimit;
+    const transactions = await Transaction.find(query)
+      .sort({
+        [sortBy]: order,
+        ...(sortBy !== 'date' && { date: -1 }),
+        ...(sortBy !== 'transactionNum' && { transactionNum: -1 }),
+      })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean();
 
-        // 2. Формирование фильтра (Query) по датам
-        const { dateFrom, dateTo } = req.query;
-        const query = {};
+    const total = await Transaction.countDocuments(query);
 
-        if (dateFrom || dateTo) {
-            query.date = {};
-            if (dateFrom) query.date.$gte = new Date(dateFrom);
-            if (dateTo) query.date.$lte = new Date(dateTo);
-        }
-
-        // 3. Запрос списка транзакций
-        const transactions = await Transaction.find(query)
-            .sort({ 
-                [sortBy]: order,
-                // Вторичная сортировка по номеру для стабильности списка
-                ...(sortBy !== 'transactionNum' && { transactionNum: order })
-            })
-            .skip(skip)
-            .limit(safeLimit)
-            .lean();
-
-        // 4. Подсчет общего количества документов (с учетом фильтра!)
-        const total = await Transaction.countDocuments(query);
-
-        // 5. АГРЕГАЦИЯ: Подсчет Баланса, Доходов и Расходов
-        const aggregation = await Transaction.aggregate([
-            { $match: query }, // Считаем только для выбранного периода
-            {
-                $group: {
-                    _id: null,
-                    // Суммируем только положительные числа
-                    income: { 
-                        $sum: { $cond: [{ $gt: ["$amount", 0] }, "$amount", 0] } 
-                    },
-                    // Суммируем только отрицательные числа
-                    expenses: { 
-                        $sum: { $cond: [{ $lt: ["$amount", 0] }, "$amount", 0] } 
-                    }
-                }
-            }
-        ]);
-
-        // Извлекаем результаты или ставим 0, если данных нет
-        const resultStats = aggregation[0] || { income: 0, expenses: 0 };
-
-        // 6. Формирование финального ответа
-        res.json({
-            total,
-            page: safePage,
-            limit: safeLimit,
-            totalPages: Math.ceil(total / safeLimit),
-            stats: {
-                income: resultStats.income,
-                expenses: Math.abs(resultStats.expenses), // Делаем расход положительным для фронта
-                balance: resultStats.income + resultStats.expenses // Итоговая сумма
+    const aggregation = await Transaction.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          income: {
+            $sum: {
+              $cond: [{ $gt: ['$amount', 0] }, '$amount', 0],
             },
-            data: transactions
-        });
-    } catch (error) {
-        console.error('Full Error:', error);
-        res.status(500).json({ 
-            message: 'Ошибка сервера при получении транзакций', 
-            error: error.message 
-        });
-    }
+          },
+          expenses: {
+            $sum: {
+              $cond: [{ $lt: ['$amount', 0] }, '$amount', 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    const resultStats = aggregation[0] || { income: 0, expenses: 0 };
+
+    res.json({
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+      stats: {
+        income: resultStats.income,
+        expenses: Math.abs(resultStats.expenses),
+        balance: resultStats.income + resultStats.expenses,
+      },
+      data: transactions,
+    });
+  } catch (error) {
+    console.error('Full Error:', error);
+    res.status(500).json({
+      message: 'Ошибка сервера при получении транзакций',
+      error: error.message,
+    });
+  }
 });
 
-// Роут для детальной статистики по категориям (например, для графиков)
+// POST /api/transactions
+router.post('/', async (req, res) => {
+  try {
+    const payload = buildTransactionPayload(req.body);
+    const transaction = await Transaction.create({
+      ...payload,
+      transactionNum: await getNextTransactionNum(),
+    });
+
+    res.status(201).json({
+      message: 'Операция создана',
+      data: transaction,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: 'Ошибка при создании операции',
+      error: error.message,
+    });
+  }
+});
+
+// GET /api/transactions/stats
 router.get('/stats', async (req, res) => {
-    try {
-        const { dateFrom, dateTo } = req.query;
-        const query = {};
+  try {
+    const { dateFrom, dateTo } = req.query;
+    const query = normalizeDateRange(dateFrom, dateTo);
 
-        if (dateFrom || dateTo) {
-            query.date = {};
-            if (dateFrom) query.date.$gte = new Date(dateFrom);
-            if (dateTo) query.date.$lte = new Date(dateTo);
-        }
+    const stats = await Transaction.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: '$categoryInfo',
+          total: { $sum: '$amount' },
+        },
+      },
+      { $sort: { total: -1 } },
+    ]);
 
-        const stats = await Transaction.aggregate([
-            { $match: query },
-            { $group: { _id: "$categoryInfo", total: { $sum: "$amount" } } },
-            { $sort: { total: -1 } }
-        ]);
-        res.json(stats);
-    } catch (error) {
-        res.status(500).json({ message: 'Ошибка при расчете статистики по категориям' });
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({
+      message: 'Ошибка при расчете статистики по категориям',
+      error: error.message,
+    });
+  }
+});
+
+// PUT /api/transactions/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const payload = buildTransactionPayload(req.body);
+
+    const updatedTransaction = await Transaction.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedTransaction) {
+      return res.status(404).json({
+        message: 'Операция не найдена',
+      });
     }
+
+    return res.json({
+      message: 'Операция обновлена',
+      data: updatedTransaction,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: 'Ошибка при обновлении операции',
+      error: error.message,
+    });
+  }
+});
+
+// DELETE /api/transactions/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedTransaction = await Transaction.findByIdAndDelete(req.params.id);
+
+    if (!deletedTransaction) {
+      return res.status(404).json({
+        message: 'Операция не найдена',
+      });
+    }
+
+    return res.json({
+      message: 'Операция удалена',
+      data: deletedTransaction,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: 'Ошибка при удалении операции',
+      error: error.message,
+    });
+  }
 });
 
 module.exports = router;

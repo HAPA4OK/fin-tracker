@@ -1,11 +1,7 @@
-import { FamilySettingsSheet } from '../components/FamilySettingsSheet';
+import { FamilyPage } from '../FamilyPage';
 
 export function FamilySettingsPage() {
-  return (
-    <div className="standalone-page">
-      <FamilySettingsSheet />
-    </div>
-  );
+  return <FamilyPage variant="settings" />;
 }
 
 export default FamilySettingsPage;
