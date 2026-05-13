@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import './App.css';
@@ -30,29 +30,66 @@ type MainPageProps = {
   defaultMenuOpen?: boolean;
 };
 
-const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => (
-  <div className="body-dim">
-    <div className="app-shell">
-      <Header userName="Олег Зуев" defaultMenuOpen={defaultMenuOpen} />
 
-      <main className="dashboard-grid">
-        <div className="left-stack">
-          <PeriodSelector />
-          <StatsCards balance="92 000 ₽" income="110 000 ₽" expenses="22 000 ₽" />
-          <OperationForm />
-          <OperationsList />
-        </div>
+const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
+  // 1. Создаем состояние для статистики
+  const [stats, setStats] = useState({
+    balance: 0,
+    income: 0,
+    expenses: 0
+  });
 
-        <div className="right-stack">
-          <CategoryChart title="Расходы по категориям" total="22 000 ₽" data={[]} />
-          <CategoryChart title="Доходы по категориям" total="22 000 ₽" isIncome data={[]} />
-        </div>
-      </main>
+  // Дополнительно можно хранить и список транзакций, чтобы OperationsList тоже обновлялся
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-      <footer className="panel footer">© 2025 Финансовый трекер</footer>
+  // 2. Функция, которую вызовет PeriodSelector после успешного fetch
+  const handleDataUpdate = (result: any) => {
+    if (result.stats) {
+      setStats(result.stats);
+    }
+    if (result.data) {
+      setTransactions(result.data);
+    }
+  };
+
+  // Форматирование для вывода (можно вынести в утилиты)
+  const formatCurrency = (value: number) => 
+    new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value);
+
+  return (
+    <div className="body-dim">
+      <div className="app-shell">
+        <Header userName="Олег Зуев" defaultMenuOpen={defaultMenuOpen} />
+
+        <main className="dashboard-grid">
+          <div className="left-stack">
+            {/* 3. Передаем функцию обратного вызова в селектор */}
+            <PeriodSelector onDataLoaded={handleDataUpdate} />
+            
+            {/* 4. Передаем данные из стейта в карточки */}
+            <StatsCards 
+              balance={formatCurrency(stats.balance)} 
+              income={formatCurrency(stats.income)} 
+              expenses={formatCurrency(stats.expenses)} 
+            />
+            
+            <OperationForm />
+            
+            {/* 5. Передаем актуальный список транзакций */}
+            <OperationsList transactions={transactions} />
+          </div>
+
+          <div className="right-stack">
+            <CategoryChart title="Расходы по категориям" total={formatCurrency(stats.expenses)} data={[]} />
+            <CategoryChart title="Доходы по категориям" total={formatCurrency(stats.income)} isIncome data={[]} />
+          </div>
+        </main>
+
+        <footer className="panel footer">© 2026 Финансовый трекер</footer>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const publicRoutes: AppRoute[] = [
   {

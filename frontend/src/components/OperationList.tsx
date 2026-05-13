@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 
+// Тип данных из MongoDB (PFM проект)
+interface ApiTransaction {
+  _id: string;
+  transactionNum: number;
+  amount: number;
+  date: string; 
+  categoryInfo: string;
+  bank?: string;
+}
+
+// Тип для отображения в верстке
 type Operation = {
-  id: number;
+  id: string | number;
   title: string;
   tag: string;
   date: string;
@@ -9,12 +20,9 @@ type Operation = {
   color: 'green' | 'red';
 };
 
-const operations: Operation[] = [
-  { id: 1, title: 'Зарплата', tag: 'Зарплата', date: '29.03.2026', amount: '+85 000 ₽', color: 'green' },
-  { id: 2, title: 'Продукты', tag: 'Еда', date: '27.03.2026', amount: '-2 000 ₽', color: 'red' },
-  { id: 3, title: 'Такси', tag: 'Транспорт', date: '26.03.2026', amount: '-500 ₽', color: 'red' },
-  { id: 4, title: 'Проект', tag: 'Проекты', date: '22.03.2026', amount: '+20 000 ₽', color: 'green' },
-];
+interface OperationsListProps {
+  transactions: ApiTransaction[]; // Приходят из MainPage после fetch в PeriodSelector
+}
 
 const rowMenuStyle: React.CSSProperties = {
   position: 'absolute',
@@ -47,12 +55,26 @@ const noticeStyle: React.CSSProperties = {
   fontWeight: 700,
 };
 
-const OperationsList: React.FC = () => {
+const OperationsList: React.FC<OperationsListProps> = ({ transactions }) => {
   const [expanded, setExpanded] = useState(false);
-  const [activeOperationId, setActiveOperationId] = useState<number | null>(null);
+  const [activeOperationId, setActiveOperationId] = useState<string | number | null>(null);
   const [notice, setNotice] = useState('');
 
-  const visibleOperations = expanded ? operations : operations.slice(0, 2);
+  // Трансформируем ApiTransaction в Operation для верстки
+  const mappedOperations: Operation[] = transactions.map((apiOp) => {
+    const isIncome = apiOp.amount > 0;
+    return {
+      id: apiOp._id, // Используем MongoDB ID
+      title: apiOp.categoryInfo || 'Без категории',
+      tag: apiOp.bank || 'Общий счет',
+      date: new Date(apiOp.date).toLocaleDateString('ru-RU'), // Формат 29.03.2026
+      amount: `${isIncome ? '+' : ''}${apiOp.amount.toLocaleString()} ₽`,
+      color: isIncome ? 'green' : 'red',
+    };
+  });
+
+  // Логика "Показать больше"
+  const visibleOperations = expanded ? mappedOperations : mappedOperations.slice(0, 4);
 
   const handleAction = (action: string, operation: Operation) => {
     setNotice(`${action}: ${operation.title}`);
@@ -63,62 +85,68 @@ const OperationsList: React.FC = () => {
     <section className="panel operations-panel">
       <div className="section-heading">
         <h2>Все операции</h2>
-        <span className="list-count">{operations.length}</span>
+        <span className="list-count">{mappedOperations.length}</span>
       </div>
 
       <div className="operations-list">
-        {visibleOperations.map((op) => (
-          <div className="operation-row" style={{ position: 'relative' }} key={op.id}>
-            <div>
-              <strong>{op.title}</strong>
-              <span>{op.tag}</span>
-            </div>
-
-            <span>{op.date}</span>
-            <strong className={op.color}>{op.amount}</strong>
-
-            <button
-              className="kebab"
-              type="button"
-              onClick={() => {
-                setActiveOperationId((current) => (current === op.id ? null : op.id));
-                setNotice('');
-              }}
-              aria-label={`Открыть действия для операции ${op.title}`}
-            >
-              ⋯
-            </button>
-
-            {activeOperationId === op.id && (
-              <div className="dropdown" style={rowMenuStyle} role="menu">
-                <button type="button" style={menuButtonStyle} onClick={() => handleAction('Редактирование выбрано', op)}>
-                  Редактировать
-                </button>
-                <button type="button" style={menuButtonStyle} onClick={() => handleAction('Повтор операции выбран', op)}>
-                  Повторить
-                </button>
-                <button type="button" style={menuButtonStyle} onClick={() => handleAction('Удаление выбрано', op)}>
-                  Удалить
-                </button>
+        {mappedOperations.length > 0 ? (
+          visibleOperations.map((op) => (
+            <div className="operation-row" style={{ position: 'relative' }} key={op.id}>
+              <div>
+                <strong>{op.title}</strong>
+                <span>{op.tag}</span>
               </div>
-            )}
-          </div>
-        ))}
+
+              <span>{op.date}</span>
+              <strong className={op.color}>{op.amount}</strong>
+
+              <button
+                className="kebab"
+                type="button"
+                onClick={() => {
+                  setActiveOperationId((current) => (current === op.id ? null : op.id));
+                  setNotice('');
+                }}
+                aria-label={`Открыть действия для операции ${op.title}`}
+              >
+                ⋯
+              </button>
+
+              {activeOperationId === op.id && (
+                <div className="dropdown" style={rowMenuStyle} role="menu">
+                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Редактирование выбрано', op)}>
+                    Редактировать
+                  </button>
+                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Повтор операции выбран', op)}>
+                    Повторить
+                  </button>
+                  <button type="button" style={menuButtonStyle} onClick={() => handleAction('Удаление выбрано', op)}>
+                    Удалить
+                  </button>
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div style={noticeStyle}>За выбранный период операций не найдено</div>
+        )}
       </div>
 
       {notice && <div style={noticeStyle}>{notice}</div>}
 
-      <button
-        className="show-more"
-        type="button"
-        onClick={() => {
-          setExpanded((value) => !value);
-          setActiveOperationId(null);
-          setNotice('');
-        }}
-      >
-        {expanded ? 'Свернуть' : 'Показать больше'}
-      </button>
+      {mappedOperations.length > 4 && (
+        <button
+          className="show-more"
+          type="button"
+          onClick={() => {
+            setExpanded((value) => !value);
+            setActiveOperationId(null);
+            setNotice('');
+          }}
+        >
+          {expanded ? 'Свернуть' : 'Показать больше'}
+        </button>
+      )}
     </section>
   );
 };

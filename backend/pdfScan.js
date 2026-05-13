@@ -26,7 +26,7 @@ function identifyBank(docItems) {
 function findDateByOccurrence(items, target) {
     const datePattern = /\d{2}\.\d{2}\.\d{4}/;
     let count = 0;
-    const actualTarget = (target * 2) - 1;
+    const actualTarget = (target * 2) ;
 
     for (let i = 0; i < items.length; i++) {
         const val = items[i].str ? items[i].str.trim() : "";

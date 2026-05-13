@@ -115,19 +115,25 @@ async function extractAllPagesData(pdf) {
 }
 
 
+function parseMoneyToNumber(str) {
+    if (!str) return 0;
+    const cleanStr = str.replace(/\s/g, '').replace(',', '.');
+    return parseFloat(cleanStr) || 0;
+}
 
 
 //-------------------ГЛАВНАЯ ФУНКЦИЯ ОБРАБОТКИ ВЫПИСКИ ИЗ БАНКА-------------------
 async function aboutTransaction(docItems, bankName) {
     const totalPages = docItems.length > 0 ? Math.max(...docItems.map(i => i.page)) : 0;
     let globalTransactionNum = 1;
+    let lastBalance = null;
 
-    // 1. Поиск номера карты
+    // 1. Поиск номера карты (твой оригинальный блок по координатам)
     const cardElement = docItems.find(item => 
         item.page === 1 && 
         Math.abs(item.x - 60) < 1 &&      
         Math.abs(item.y - 665.86) < 1 &&
-        item.str &&                               
+        item.str &&                                
         item.str.trim().length > 0   
     );
 
@@ -147,42 +153,81 @@ async function aboutTransaction(docItems, bankName) {
             const dataAfterMarker = currentPageItems.slice(searchMarker + 1);
             let occurrence = 1; 
             let found = true;
+            let rawPageData = []; 
 
+            // 2. Сбор всех данных со страницы (сырой буфер)
             while (found) {
-              // работа с данными
                 const dateData = findDateByOccurrence(dataAfterMarker, occurrence);
-                const moneyData = findMoney(dataAfterMarker, occurrence);
+                const rawMoneyData = findMoney(dataAfterMarker, occurrence);
                 const categoryData = findCategory(dataAfterMarker, occurrence);
                 const commentaryData = findCommentary(dataAfterMarker, occurrence, categoryData);
-                const rawCategory = categoryData || "Не определено";
 
-                const categoryDataTransformed = categoryTransform(rawCategory);
-
-                if (dateData && moneyData) {
-                    // Формируем объект согласно Mongoose Schema
-                    pageTransactions.push({
-                        date: parseDate(dateData.item.str),
-                        amount: moneyData.amount,          
-                        balance: moneyData.balance,
+                if (dateData && rawMoneyData) {
+                    rawPageData.push({
+                        dateStr: dateData.item.str,
+                        money: rawMoneyData, 
                         category: categoryData,
-                        categoryInfo: categoryDataTransformed,
-                        bank: `${bankName} ${cardNumber}`.trim(),
-                        commentary: commentaryData || "Комментарий не найден",
-                        page: i,
-                        transactionNum: globalTransactionNum++,
+                        commentary: commentaryData
                     });
                     occurrence++; 
                 } else {
                     found = false; 
                 }
             }
-        }
 
-        // --- ЗАПИСЬ В БД ПОСТРАНИЧНО ---
+            // 3. Обработка СНИЗУ ВВЕРХ (от старых к новым) для расчета расхода/дохода
+            for (let j = rawPageData.length - 1; j >= 0; j--) {
+                const item = rawPageData[j];
+                
+                // Извлекаем суммы через твою функцию парсинга
+                const cleanAmount = parseMoneyToNumber(item.money.amount);
+                const cleanBalance = parseMoneyToNumber(item.money.balance);
+                
+                // Трансформация категории (твоя константа)
+                const rawCategory = item.category || "Не определено";
+                const categoryDataTransformed = categoryTransform(rawCategory);
+
+                let finalAmount = cleanAmount;
+
+                // Сравнение баланса для знака +/-
+                if (lastBalance !== null) {
+                    if (cleanBalance < lastBalance) {
+                        finalAmount = -Math.abs(cleanAmount); // Расход
+                    } else if (cleanBalance > lastBalance) {
+                        finalAmount = Math.abs(cleanAmount);  // Доход
+                    }
+                }
+
+                lastBalance = cleanBalance; 
+
+                // Формируем итоговый объект
+                pageTransactions.push({
+                    date: parseDate(item.dateStr),
+                    amount: finalAmount, 
+                    balance: cleanBalance,
+                    category: item.category,
+                    categoryInfo: categoryDataTransformed, // Теперь точно передается правильно
+                    bank: `${bankName} ${cardNumber}`.trim(),
+                    commentary: item.commentary || "Комментарий не найден",
+                    page: i,
+                    transactionNum: 0,
+                });
+            }
+
+            // Переворачиваем обратно, чтобы в БД новые транзакции были сверху (как в PDF)
+            pageTransactions.reverse();
+
+            pageTransactions.forEach(transaction => {
+                transaction.transactionNum = globalTransactionNum++;
+            });
+        }
+        
+
+        // --- ЗАПИСЬ В БД ---
         if (pageTransactions.length > 0) {
             try {
                 await Transaction.insertMany(pageTransactions); 
-                console.log(`✅ Страница ${i}: сохранено ${pageTransactions.length} транзакций в БД`);
+                console.log(`✅ Страница ${i}: сохранено ${pageTransactions.length} транзакций`);
             } catch (err) {
                 console.error(`❌ Ошибка записи страницы ${i}:`, err);
             }

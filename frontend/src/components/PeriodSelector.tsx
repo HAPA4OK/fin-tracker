@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 
-const periods = ['Все время', 'Сегодня', 'Эта неделя', 'Этот месяц', 'Свой период'];
+const periods = [
+  { id: 'all', label: 'Все время' },
+  { id: 'today', label: 'Сегодня' },
+  { id: 'week', label: 'Эта неделя' },
+  { id: 'month', label: 'Этот месяц' },
+  { id: 'custom', label: 'Свой период' },
+];
 
 const dateInputStyle: React.CSSProperties = {
   maxWidth: '150px',
@@ -19,14 +25,87 @@ const appliedStyle: React.CSSProperties = {
   fontWeight: 700,
 };
 
-const PeriodSelector: React.FC = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState('Свой период');
+interface PeriodSelectorProps {
+  onDataLoaded: (result: any) => void; 
+}
+
+// Добавляем деструктуризацию пропсов
+const PeriodSelector: React.FC<PeriodSelectorProps> = ({ onDataLoaded }) => {
+  const [selectedId, setSelectedId] = useState('custom');
   const [dateFrom, setDateFrom] = useState('2026-03-23');
   const [dateTo, setDateTo] = useState('2026-05-04');
   const [appliedPeriod, setAppliedPeriod] = useState('');
 
-  const applyPeriod = () => {
-    setAppliedPeriod(`${selectedPeriod}: ${dateFrom} — ${dateTo}`);
+  
+
+  // Чистая функция для мгновенного расчета дат без ожидания стейта
+  const calculateDates = (id: string) => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    switch (id) {
+      case 'today':
+        return { from: todayStr, to: todayStr };
+      case 'week': {
+        const firstDay = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+        return { from: firstDay.toISOString().split('T')[0], to: todayStr };
+      }
+      case 'month': {
+        const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { from: firstDayMonth.toISOString().split('T')[0], to: todayStr };
+      }
+      case 'all':
+        return { from: '2000-01-01', to: todayStr };
+      default:
+        return null; // Для 'custom' берем данные из текущих инпутов
+    }
+  };
+
+  const handlePeriodClick = (id: string) => {
+    setSelectedId(id);
+    setAppliedPeriod('');
+    
+    const calculated = calculateDates(id);
+    if (calculated) {
+      setDateFrom(calculated.from);
+      setDateTo(calculated.to);
+    }
+  };
+
+  
+
+  const applyPeriod = async () => {
+    // 1. Определяем, какие даты использовать для запроса
+    const calculated = calculateDates(selectedId);
+    const finalFrom = calculated ? calculated.from : dateFrom;
+    const finalTo = calculated ? calculated.to : dateTo;
+
+    // 2. Обновляем визуальный статус
+    const label = periods.find(p => p.id === selectedId)?.label;
+    setAppliedPeriod(`${label}: ${finalFrom} — ${finalTo}`);
+
+    // 3. Формируем URL с параметрами
+    const url = new URL('http://localhost:5000/api/transactions');
+    url.searchParams.append('dateFrom', finalFrom);
+    url.searchParams.append('dateTo', finalTo);
+
+    try {
+      console.log(`Запрос: ${url.toString()}`);
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) throw new Error('Ошибка сети');
+      
+      const result = await response.json();
+
+      console.log('Данные загружены:', result.data);
+      console.log('Статистика периода:', result.stats);
+      
+      // Здесь можно вызвать функцию обратного вызова, например:
+      onDataLoaded(result);
+      
+    } catch (error) {
+      console.error('Ошибка при загрузке:', error);
+    }
   };
 
   return (
@@ -38,15 +117,12 @@ const PeriodSelector: React.FC = () => {
       <div className="period-chips">
         {periods.map((period) => (
           <button
-            key={period}
-            className={`period-chip ${selectedPeriod === period ? 'active' : ''}`}
+            key={period.id}
+            className={`period-chip ${selectedId === period.id ? 'active' : ''}`}
             type="button"
-            onClick={() => {
-              setSelectedPeriod(period);
-              setAppliedPeriod('');
-            }}
+            onClick={() => handlePeriodClick(period.id)}
           >
-            {period}
+            {period.label}
           </button>
         ))}
       </div>
@@ -57,7 +133,8 @@ const PeriodSelector: React.FC = () => {
           style={dateInputStyle}
           type="date"
           value={dateFrom}
-          onChange={(event) => setDateFrom(event.target.value)}
+          readOnly={selectedId !== 'custom'}
+          onChange={(e) => setDateFrom(e.target.value)}
         />
         <span>–</span>
         <input
@@ -65,14 +142,19 @@ const PeriodSelector: React.FC = () => {
           style={dateInputStyle}
           type="date"
           value={dateTo}
-          onChange={(event) => setDateTo(event.target.value)}
+          readOnly={selectedId !== 'custom'}
+          onChange={(e) => setDateTo(e.target.value)}
         />
         <button className="action-light" type="button" onClick={applyPeriod}>
           Применить
         </button>
       </div>
 
-      {appliedPeriod && <span style={appliedStyle}>Выбран период: {appliedPeriod}</span>}
+      {appliedPeriod && (
+        <div style={{ marginTop: '10px' }}>
+          <span style={appliedStyle}>Выбран период: {appliedPeriod}</span>
+        </div>
+      )}
     </section>
   );
 };
