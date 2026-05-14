@@ -4,7 +4,7 @@ const API_URL = 'http://localhost:5000';
 
 export const registerUser = async (userData: any) => {
   try {
-    const response = await fetch(`${API_URL}/register`, {
+    const response = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -29,7 +29,7 @@ export const registerUser = async (userData: any) => {
 
 export const loginUser = async (credentials: any) => {
   try {
-    const response = await fetch(`${API_URL}/login`, { 
+    const response = await fetch(`${API_URL}/api/auth/login`, { 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

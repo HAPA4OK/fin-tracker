@@ -239,7 +239,7 @@ async function aboutTransaction(docItems, bankName) {
 
 
 
-//scanPdf()
+scanPdf()
 
 // -------------------------------------------------------------
 
